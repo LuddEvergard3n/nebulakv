@@ -20,6 +20,8 @@ import (
 )
 
 type Server struct {
+	// PersistenceStatus is configured before Serve starts.
+	PersistenceStatus     func() string
 	config                config.Config
 	store                 *storage.Store
 	dispatch              command.Dispatcher
@@ -154,6 +156,9 @@ func (s *Server) info() string {
 	persistence := "disabled"
 	if s.config.AppendOnly {
 		persistence = "enabled;fsync=always"
+		if s.PersistenceStatus != nil {
+			persistence += ";status=" + s.PersistenceStatus()
+		}
 	}
 	return fmt.Sprintf("# Server\r\nnebulakv_version:0.1.0\r\nuptime_in_seconds:%d\r\n# Clients\r\nconnected_clients:%d\r\ntotal_connections_received:%d\r\n# Stats\r\ntotal_commands_processed:%d\r\nkeys:%d\r\nexpired_keys:%d\r\nkey_value_bytes:%d\r\npersistence:%s\r\n", int64(time.Since(s.started).Seconds()), clients, s.connections.Load(), s.commands.Load(), stats.Keys, stats.Expired, stats.Bytes, persistence)
 }
