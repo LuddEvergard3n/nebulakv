@@ -108,6 +108,8 @@ func (s *Server) handle(ctx context.Context, conn net.Conn) {
 	defer func() { conn.Close(); s.mu.Lock(); delete(s.clients, conn); s.mu.Unlock(); s.wg.Done() }()
 	decoder := resp.NewDecoder(conn)
 	writer := bufio.NewWriter(conn)
+	authenticated := s.config.Password == ""
+	failedAuth := 0
 	for ctx.Err() == nil {
 		if err := conn.SetReadDeadline(time.Now().Add(s.config.ReadTimeout)); err != nil {
 			return
@@ -127,12 +129,26 @@ func (s *Server) handle(ctx context.Context, conn net.Conn) {
 			return
 		}
 		s.commands.Add(1)
-		response := s.dispatch.Execute(args)
+		var response resp.Value
+		if strings.EqualFold(args[0], "AUTH") {
+			var ok bool
+			ok, response = s.authenticate(args)
+			authenticated = ok || s.config.Password == ""
+			if !ok {
+				failedAuth++
+			} else {
+				failedAuth = 0
+			}
+		} else if !authenticated && !strings.EqualFold(args[0], "QUIT") {
+			response = resp.Err("NOAUTH Authentication required")
+		} else {
+			response = s.dispatch.Execute(args)
+		}
 		if err := s.respond(conn, writer, response); err != nil {
 			s.log.Debug("response failed", "error", err)
 			return
 		}
-		if strings.EqualFold(args[0], "QUIT") {
+		if strings.EqualFold(args[0], "QUIT") || failedAuth >= 5 {
 			return
 		}
 	}

@@ -26,6 +26,9 @@ func run() (runErr error) {
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: c.Level}))
 	s := storage.New(nil)
+	if err := s.SetMemoryLimit(c.MaxMemory); err != nil {
+		return err
+	}
 	var journal *persistence.Log
 	if c.AppendOnly {
 		journal, err = persistence.Open(c.Data, s.Replay)

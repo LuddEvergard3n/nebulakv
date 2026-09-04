@@ -27,7 +27,7 @@ type Log struct {
 
 // Open locks the journal for its lifetime, replays valid records and truncates
 // only an incomplete final record. Complete corrupt records fail closed.
-func Open(dir string, apply func(storage.Mutation)) (*Log, error) {
+func Open(dir string, apply func(storage.Mutation) error) (*Log, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func Open(dir string, apply func(storage.Mutation)) (*Log, error) {
 	return &Log{file: f}, nil
 }
 
-func replay(f *os.File, apply func(storage.Mutation)) error {
+func replay(f *os.File, apply func(storage.Mutation) error) error {
 	offset := int64(len(magic))
 	for {
 		var header [8]byte
@@ -113,7 +113,9 @@ func replay(f *os.File, apply func(storage.Mutation)) error {
 		if err := validate(m); err != nil {
 			return fmt.Errorf("invalid journal record at %d: %w", offset, err)
 		}
-		apply(m)
+		if err := apply(m); err != nil {
+			return fmt.Errorf("replay at %d: %w", offset, err)
+		}
 		offset += 8 + int64(size)
 	}
 	_, err := f.Seek(offset, io.SeekStart)

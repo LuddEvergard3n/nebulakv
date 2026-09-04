@@ -102,7 +102,7 @@ func TestCorruptionIsNotSilentlyTruncated(t *testing.T) {
 	if err := os.WriteFile(path, b, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if l, err := Open(dir, func(storage.Mutation) {}); err == nil {
+	if l, err := Open(dir, func(storage.Mutation) error { return nil }); err == nil {
 		l.Close()
 		t.Fatal("accepted corrupt journal")
 	}
@@ -115,7 +115,7 @@ func TestCorruptionIsNotSilentlyTruncated(t *testing.T) {
 func TestExclusiveLockAndClear(t *testing.T) {
 	dir := t.TempDir()
 	s, l := openStore(t, dir, nil)
-	if other, err := Open(dir, func(storage.Mutation) {}); err == nil {
+	if other, err := Open(dir, func(storage.Mutation) error { return nil }); err == nil {
 		other.Close()
 		t.Fatal("journal opened twice")
 	}

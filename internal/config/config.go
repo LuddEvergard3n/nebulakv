@@ -17,6 +17,8 @@ type Config struct {
 	Data                                       string
 	Level                                      slog.Level
 	MaxClients                                 int
+	MaxMemory                                  int64
+	Password                                   string
 	ReadTimeout, WriteTimeout, ShutdownTimeout time.Duration
 }
 
@@ -30,6 +32,8 @@ func Parse(args []string, out io.Writer) (Config, error) {
 	f.StringVar(&c.Data, "data", "./data", "directory containing appendonly.aof")
 	level := f.String("log-level", "info", "debug, info, warn, or error")
 	f.IntVar(&c.MaxClients, "max-clients", 64, "maximum simultaneous connections")
+	f.Int64Var(&c.MaxMemory, "maxmemory", 64<<20, "maximum accounted dataset bytes (no eviction)")
+	passwordFile := f.String("password-file", "", "file containing the AUTH password; empty disables AUTH")
 	f.DurationVar(&c.ReadTimeout, "read-timeout", 30*time.Second, "deadline for a complete command, including idle time")
 	f.DurationVar(&c.WriteTimeout, "write-timeout", 5*time.Second, "response write deadline")
 	f.DurationVar(&c.ShutdownTimeout, "shutdown-timeout", 5*time.Second, "time to drain connections before closing them")
@@ -38,6 +42,14 @@ func Parse(args []string, out io.Writer) (Config, error) {
 	}
 	if f.NArg() != 0 {
 		return c, errors.New("unexpected positional arguments")
+	}
+	if c.MaxMemory <= 0 || c.MaxMemory > 1<<40 {
+		return c, errors.New("maxmemory must be between 1 and 1099511627776 bytes")
+	}
+	var err error
+	c.Password, err = ReadSecret(*passwordFile)
+	if err != nil {
+		return c, err
 	}
 	if err := c.Level.UnmarshalText([]byte(*level)); err != nil {
 		return c, err

@@ -15,7 +15,12 @@ type Dispatcher struct {
 	Info  func() string
 }
 
-func failure(err error) resp.Value { return resp.Err("ERR " + err.Error()) }
+func failure(err error) resp.Value {
+	if err == storage.ErrMemory {
+		return resp.Err("OOM " + err.Error())
+	}
+	return resp.Err("ERR " + err.Error())
+}
 func count(n int64, err error) resp.Value {
 	if err != nil {
 		return failure(err)

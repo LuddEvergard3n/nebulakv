@@ -37,18 +37,19 @@ type Mutation struct {
 type Journal interface{ Append(Mutation) error }
 
 type Store struct {
-	mu      sync.Mutex
-	entries map[string]Entry
-	now     func() time.Time
-	journal Journal
-	expired uint64
+	mu              sync.Mutex
+	entries         map[string]Entry
+	now             func() time.Time
+	journal         Journal
+	expired         uint64
+	used, maxMemory int64
 }
 
 func New(now func() time.Time) *Store {
 	if now == nil {
 		now = time.Now
 	}
-	return &Store{entries: make(map[string]Entry), now: now}
+	return &Store{entries: make(map[string]Entry), now: now, maxMemory: DefaultMaxMemory}
 }
 
 // SetJournal is called after replay, before accepting clients.
@@ -57,7 +58,7 @@ func (s *Store) SetJournal(j Journal) { s.mu.Lock(); defer s.mu.Unlock(); s.jour
 func (s *Store) lookup(key string, now int64) (Entry, bool) {
 	e, ok := s.entries[key]
 	if ok && e.ExpiresAt != 0 && e.ExpiresAt <= now {
-		delete(s.entries, key)
+		s.remove(key)
 		s.expired++
 		return Entry{}, false
 	}
@@ -67,20 +68,32 @@ func (s *Store) lookup(key string, now int64) (Entry, bool) {
 func (s *Store) apply(m Mutation) {
 	if m.Clear {
 		s.entries = make(map[string]Entry)
+		s.used = 0
 	}
 	for _, c := range m.Changes {
 		if c.Delete {
-			delete(s.entries, string(c.Key))
+			s.remove(string(c.Key))
 		} else {
-			s.entries[string(c.Key)] = Entry{string(c.Value), c.ExpiresAt}
+			s.assign(string(c.Key), Entry{string(c.Value), c.ExpiresAt})
 		}
 	}
 }
 
 // Replay applies trusted, validated journal records without appending them again.
-func (s *Store) Replay(m Mutation) { s.mu.Lock(); defer s.mu.Unlock(); s.apply(m) }
+func (s *Store) Replay(m Mutation) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.admit(m); err != nil {
+		return err
+	}
+	s.apply(m)
+	return nil
+}
 
 func (s *Store) commit(m Mutation) error {
+	if err := s.admit(m); err != nil {
+		return err
+	}
 	if s.journal != nil {
 		if err := s.journal.Append(m); err != nil {
 			return err
@@ -96,8 +109,11 @@ func change(key string, e Entry) Change {
 
 // In-memory writes do not need to allocate or encode a journal record.
 func (s *Store) put(key string, e Entry) error {
+	if err := s.admitPut(key, e); err != nil {
+		return err
+	}
 	if s.journal == nil {
-		s.entries[key] = e
+		s.assign(key, e)
 		return nil
 	}
 	return s.commit(Mutation{Changes: []Change{change(key, e)}})
@@ -149,12 +165,6 @@ func (s *Store) SetMany(pairs []string) error {
 	defer s.mu.Unlock()
 	if len(pairs)%2 != 0 {
 		return errors.New("expected key/value pairs")
-	}
-	if s.journal == nil {
-		for i := 0; i < len(pairs); i += 2 {
-			s.entries[pairs[i]] = Entry{Value: pairs[i+1]}
-		}
-		return nil
 	}
 	m := Mutation{Changes: make([]Change, 0, len(pairs)/2)}
 	for i := 0; i < len(pairs); i += 2 {
@@ -292,9 +302,10 @@ func (s *Store) Keys(pattern string) []string {
 }
 
 type Stats struct {
-	Keys    int
-	Expired uint64
-	Bytes   int64
+	Keys                      int
+	Expired                   uint64
+	Bytes                     int64
+	AccountedBytes, MaxMemory int64
 }
 
 // Stats performs a full scan; use for diagnostics, not a hot-path metric.
@@ -310,5 +321,6 @@ func (s *Store) Stats() Stats {
 		}
 	}
 	stats.Expired = s.expired
+	stats.AccountedBytes, stats.MaxMemory = s.used, s.maxMemory
 	return stats
 }

@@ -15,17 +15,30 @@ import (
 )
 
 func start(t *testing.T, max int) (string, context.CancelFunc, <-chan error) {
+	c := config.Config{MaxClients: max, ReadTimeout: time.Second, WriteTimeout: time.Second, ShutdownTimeout: time.Second}
+	return startServer(t, New(c, storage.New(nil), slog.New(slog.NewTextHandler(io.Discard, nil))))
+}
+
+func startServer(t *testing.T, s *Server) (string, context.CancelFunc, <-chan error) {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := config.Config{MaxClients: max, ReadTimeout: time.Second, WriteTimeout: time.Second, ShutdownTimeout: time.Second}
-	s := New(c, storage.New(nil), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- s.Serve(ctx, ln) }()
-	t.Cleanup(cancel)
+	go func() { defer close(done); done <- s.Serve(ctx, ln) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Error(err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Error("server did not stop")
+		}
+	})
 	return ln.Addr().String(), cancel, done
 }
 
