@@ -46,7 +46,13 @@ func (d *Dispatcher) Execute(args []string) resp.Value {
 		return resp.String(args[1])
 	case "SET":
 		return d.set(args)
-	case "GET", "MGET":
+	case "GET":
+		e, found := s.Get(args[1])
+		if !found {
+			return resp.Nil()
+		}
+		return resp.String(e.Value)
+	case "MGET":
 		e, found := s.GetMany(args[1:])
 		items := make([]resp.Value, len(e))
 		for i := range e {
@@ -54,9 +60,6 @@ func (d *Dispatcher) Execute(args []string) resp.Value {
 			if found[i] {
 				items[i] = resp.String(e[i].Value)
 			}
-		}
-		if name == "GET" {
-			return items[0]
 		}
 		return resp.List(items...)
 	case "MSET":
@@ -103,8 +106,8 @@ func (d *Dispatcher) Execute(args []string) resp.Value {
 	case "PERSIST":
 		return count(s.Persist(args[1]))
 	case "TYPE":
-		_, found := s.GetMany(args[1:])
-		if found[0] {
+		_, found := s.Get(args[1])
+		if found {
 			return resp.Status("string")
 		}
 		return resp.Status("none")

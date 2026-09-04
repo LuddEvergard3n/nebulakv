@@ -40,6 +40,9 @@ func TestExpiration(t *testing.T) {
 	put(t, s, "b", "v", 1)
 	now = now.Add(time.Millisecond)
 	s.Sweep(100)
+	if len(s.entries) != 0 {
+		t.Fatal("active expiration did not remove entries")
+	}
 	if got := s.Stats(); got.Keys != 0 || got.Expired != 2 {
 		t.Fatal(got)
 	}
@@ -182,7 +185,7 @@ func BenchmarkStore(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				if kind == "GET" || kind == "Mixed" && i%2 == 0 {
-					s.GetMany([]string{"key"})
+					s.Get("key")
 				} else {
 					if _, _, _, err := s.Set("key", "value", SetOptions{}); err != nil {
 						b.Fatal(err)

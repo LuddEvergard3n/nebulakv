@@ -94,6 +94,21 @@ func change(key string, e Entry) Change {
 	return Change{Key: []byte(key), Value: []byte(e.Value), ExpiresAt: e.ExpiresAt}
 }
 
+// In-memory writes do not need to allocate or encode a journal record.
+func (s *Store) put(key string, e Entry) error {
+	if s.journal == nil {
+		s.entries[key] = e
+		return nil
+	}
+	return s.commit(Mutation{Changes: []Change{change(key, e)}})
+}
+
+func (s *Store) Get(key string) (Entry, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lookup(key, s.now().UnixMilli())
+}
+
 func (s *Store) GetMany(keys []string) ([]Entry, []bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -125,7 +140,7 @@ func (s *Store) Set(key, value string, opts SetOptions) (old Entry, existed, app
 		}
 		e.ExpiresAt = now + opts.TTL
 	}
-	err = s.commit(Mutation{Changes: []Change{change(key, e)}})
+	err = s.put(key, e)
 	return old, existed, err == nil, err
 }
 
@@ -134,6 +149,12 @@ func (s *Store) SetMany(pairs []string) error {
 	defer s.mu.Unlock()
 	if len(pairs)%2 != 0 {
 		return errors.New("expected key/value pairs")
+	}
+	if s.journal == nil {
+		for i := 0; i < len(pairs); i += 2 {
+			s.entries[pairs[i]] = Entry{Value: pairs[i+1]}
+		}
+		return nil
 	}
 	m := Mutation{Changes: make([]Change, 0, len(pairs)/2)}
 	for i := 0; i < len(pairs); i += 2 {
@@ -180,7 +201,7 @@ func (s *Store) Increment(key string, delta int64) (int64, error) {
 	}
 	n += delta
 	e.Value = strconv.FormatInt(n, 10)
-	if err := s.commit(Mutation{Changes: []Change{change(key, e)}}); err != nil {
+	if err := s.put(key, e); err != nil {
 		return 0, err
 	}
 	return n, nil
@@ -230,7 +251,7 @@ func (s *Store) Persist(key string) (int64, error) {
 		return 0, nil
 	}
 	e.ExpiresAt = 0
-	if err := s.commit(Mutation{Changes: []Change{change(key, e)}}); err != nil {
+	if err := s.put(key, e); err != nil {
 		return 0, err
 	}
 	return 1, nil
