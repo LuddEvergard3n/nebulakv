@@ -36,5 +36,18 @@ reachable. A portable official Go archive is used with SHA-256 verification.
    and abrupt restart. Documentation, CI configuration and review added.
 
 Docker became available after the initial inspection. The first project's core
-acceptance gates are recorded in [VALIDATION.md](VALIDATION.md). Hosted CI execution,
-the AOF rewrite extension and the other seven projects remain separate work.
+acceptance gates are recorded in [VALIDATION.md](VALIDATION.md). Hosted CI execution
+and the other seven projects remain separate work.
+
+## v0.2 requested extensions
+
+The user requested implementation and testing of the four previously listed limits.
+The previous scope boundary was expanded explicitly.
+
+1. AUTH/password-file and accounted dataset quota: `853e328`; Windows tests and vet passed.
+2. Manual/automatic journal rewrite: `edf647d`; failure, concurrency and restart tests passed.
+3. Authenticated read-only snapshot replication: `f3b33f2`; complete/partial/oversized
+   transfer, epoch changes, startup gating and replica persistence tests passed.
+4. Full Linux race suite and Docker build passed; official redis-cli demonstrated all
+   four extensions, including automatic reconnection after abrupt primary restart.
+5. Documentation, CI smoke coverage and fresh microbenchmarks updated.

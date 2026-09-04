@@ -1,0 +1,27 @@
+goos: windows
+goarch: amd64
+pkg: nebulakv/internal/storage
+cpu: 13th Gen Intel(R) Core(TM) i9-13900HX
+BenchmarkStore/GET-32         	 9860732	        33.40 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStore/GET-32         	 9471250	        32.39 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStore/GET-32         	 9869232	        30.35 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStore/SET-32         	 3436570	        81.04 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStore/SET-32         	 3903276	        72.71 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStore/SET-32         	 4281645	        69.47 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStore/Mixed-32       	 6702471	        45.01 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStore/Mixed-32       	 6030247	        64.19 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStore/Mixed-32       	 4603634	        65.56 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStore/Concurrent/1-32         	 1000000	       338.8 ns/op	      15 B/op	       2 allocs/op
+BenchmarkStore/Concurrent/1-32         	  855699	       396.6 ns/op	      15 B/op	       2 allocs/op
+BenchmarkStore/Concurrent/1-32         	  722786	       392.9 ns/op	      15 B/op	       1 allocs/op
+BenchmarkStore/Concurrent/2-32         	  730548	       405.6 ns/op	      15 B/op	       2 allocs/op
+BenchmarkStore/Concurrent/2-32         	  773713	       386.6 ns/op	      15 B/op	       2 allocs/op
+BenchmarkStore/Concurrent/2-32         	  722524	       414.6 ns/op	      15 B/op	       2 allocs/op
+BenchmarkStore/Concurrent/4-32         	  761942	       405.2 ns/op	      15 B/op	       2 allocs/op
+BenchmarkStore/Concurrent/4-32         	  698161	       413.6 ns/op	      15 B/op	       2 allocs/op
+BenchmarkStore/Concurrent/4-32         	  751671	       426.8 ns/op	      15 B/op	       2 allocs/op
+BenchmarkStore/Concurrent/8-32         	  595249	       452.5 ns/op	      15 B/op	       2 allocs/op
+BenchmarkStore/Concurrent/8-32         	  698290	       440.3 ns/op	      15 B/op	       2 allocs/op
+BenchmarkStore/Concurrent/8-32         	  623000	       450.2 ns/op	      15 B/op	       2 allocs/op
+PASS
+ok  	nebulakv/internal/storage	7.725s

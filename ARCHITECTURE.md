@@ -89,14 +89,26 @@ checksums, unknown JSON fields, malformed records and invalid file headers fail
 startup. Complete corruption is never silently discarded. CRC32 detects accidental
 damage, not malicious tampering. Journal record allocations are capped at 24 MiB.
 
-Locks use `flock` on supported Unix systems and `LockFileEx` on Windows; closing
-the handle or process termination releases ownership. This avoids stale sentinel
-lock files after crashes. Network filesystems and sharing a directory through
-multiple containers/hosts are outside the tested durability model.
+Locks use `flock` on supported Unix systems and `LockFileEx` on Windows. A stable
+`appendonly.lock` handle owns the directory while the data file is replaced; both
+handles are locked during ordinary operation. The sidecar may remain on disk after
+exit, but ownership is the OS lock, not file existence. Closing the handle or process
+termination releases it. Network filesystem semantics remain outside the tested model.
 
-There is no compaction. Replay time and disk size grow with history. File fsync
-alone is not a guarantee against device caches, filesystem errors or loss of the
-directory entry during power failure. No power-cut testing has been performed.
+REWRITEAOF compacts live entries into a same-directory temporary file. The store
+lock keeps the source stable, and only one bounded record is encoded at a time.
+The candidate is synced and closed, the original handle is closed, and the candidate
+replaces the data file while the sidecar lease remains held. The journal is reopened
+and relocked before appends resume. A rename failure reopens the unchanged old file;
+unrecoverable reopen/directory-sync errors make persistence fail closed. Unix builds
+sync the parent directory; Windows has no portable directory-sync operation here.
+Power-loss durability is not claimed on either platform.
+
+Automatic rewrite checks once per second when configured bytes exceed the threshold
+and the journal has at least doubled since its last rewrite. This avoids repeatedly
+rewriting a still-large live dataset. It is a compaction trigger, not a hard disk quota.
+Crash-left candidate files are never replayed automatically; inspect them before
+manual cleanup. Synchronous compaction can pause requests, so use modest datasets.
 
 ## Statistics
 
@@ -120,10 +132,39 @@ the drain timeout is a connection bound, not a hard process exit guarantee.
 Typical map operations are expected O(1); multi-key work scales with argument
 count. KEYS is O(total key bytes × pattern tokens) plus sorting and locks the map.
 INFO/DBSIZE scan every key. Persistent operations encode, append and fsync under
-the same lock, emphasizing simple ordering over throughput. No memory quota or
-eviction means a trusted client can exhaust the process by inserting enough data.
+the same lock, emphasizing simple ordering over throughput. Admission checks enforce
+key/value bytes plus a 96-byte allowance per entry, defaulting to 64 MiB. All final
+effects of a multi-key command are checked before journal append or mutation. Expired
+entries are reclaimed on pressure; otherwise the whole write returns OOM. This is a
+dataset budget, not exact heap/RSS accounting. Use OS/container limits for the latter.
 
 Before adding sharding, measure realistic TCP and persistence workloads, define
-atomicity across shards, and choose how to serialize durable commits. Before AOF
-rewrite, specify snapshot consistency, atomic replacement, fsync/rename behavior,
-and recovery on both Windows and Linux.
+atomicity across shards, and choose how to serialize durable commits.
+
+## Authentication and replication
+
+AUTH is checked in the connection handler before command dispatch and synchronization.
+Password files are bounded and loaded once on startup; SHA-256 digests are compared
+in constant time. A failed AUTH revokes that connection's access, and five consecutive
+failures close it. Only a single default user exists. This is not a password-storage
+KDF or TLS; the configured secret and TCP transport require local/private protection.
+
+A primary assigns a random epoch at process start and increments its revision with
+every applied logical mutation. `NKV.SYNC token` is an internal RESP-framed operation.
+An unchanged token returns UNCHANGED. Otherwise a consistent shallow copy of the map
+is streamed as a header, one bounded entry frame per key and an END marker. The
+primary admits one snapshot transfer at a time to bound retained snapshots.
+
+The replica authenticates, checks count/bytes/types/unique keys/deadlines and stages
+the entire snapshot within its dataset budget. Only the END marker and exact byte
+accounting allow installation. With persistence enabled, journal replacement happens
+before the visible map swap. The old map remains visible on malformed, interrupted
+or oversized transfers. A new primary epoch forces a full resynchronization.
+
+Replicas reject dataset writes. Before initial synchronization, data commands return
+LOADING; after a later disconnection, they serve the last complete snapshot and INFO
+reports link status, last error and age. Deadlines remain absolute. The configurable
+poll interval defaults to one second. This uses O(dataset size) transfer after changes,
+with live plus staged maps during replacement; it is not incremental replication,
+linearizable reads, a consensus protocol or automatic failover. Replication workers
+are cancelled and joined before the journal closes.

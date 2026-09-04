@@ -1,0 +1,27 @@
+PASS: AUTH gate and atomic OOM rejection
+PASS: journal compacted from 8995 to 127 bytes
+PASS: authenticated replication, read-only enforcement and TTL
+PASS: primary abrupt restart, automatic resynchronization and replica restart
+PASS: Docker process memory ceiling configured at 268435456 bytes
+# Server
+nebulakv_version:0.2.0
+uptime_in_seconds:1
+# Clients
+connected_clients:1
+total_connections_received:2
+# Stats
+total_commands_processed:4
+keys:3
+expired_keys:0
+key_value_bytes:34
+persistence:enabled;fsync=always;status=ok
+maxmemory:4096
+accounted_memory:322
+auth_enabled:true
+aof_bytes:190
+aof_rewrites:1
+role:replica
+primary_link_status:up
+replica_syncs:1
+replica_last_success_seconds:0
+replica_last_error:

@@ -1,6 +1,7 @@
 # Validation record
 
-Date: 2026-09-04. This report describes executed checks, not planned capabilities.
+Date: 2026-09-04. Updated for v0.2 extensions. This report describes executed checks,
+not planned capabilities.
 
 | Gate | Result and scope |
 | --- | --- |
@@ -18,20 +19,29 @@ Date: 2026-09-04. This report describes executed checks, not planned capabilitie
 | Binary persistence | Invalid UTF-8, NUL and CRLF values/keys survived file close/reopen tests |
 | Recovery | Incomplete final records recovered; complete checksum corruption rejected |
 | File ownership | Concurrent journal opens rejected on Windows and Linux; reopen after close passed |
+| Authentication | Connection-local AUTH, failed reauthentication, five-failure closure and password-file validation passed; official client NOAUTH gate passed |
+| Memory admission | Concurrent and atomic multi-key quota tests passed; official client oversized MSET returned OOM without changing existing data |
+| Process memory ceiling | Both test containers configured with 256 MiB memory/no extra swap; Docker configuration inspected, no forced OOM-kill experiment |
+| Compaction | Live/binary/TTL preservation, subsequent append/restart, concurrent writes and injected rename failure passed on Windows and Linux |
+| Compaction size | Official client fixture reduced AOF from 8,995 to 127 bytes |
+| Replication | Authenticated primary/replica synchronization, unchanged revisions, stale-data retention, read-only checks and replica restart passed |
+| Replication failures | Interrupted/duplicate/malformed/oversized snapshots, wrong primary credentials and initial LOADING gate tested |
+| Automatic reconnect | Primary killed and restarted; running replica received later writes automatically |
 | Parser fuzzing | Five-second run, four workers, 427,637 executions; no failure in that run |
 | Benchmarks | Three short Windows samples per storage workload; raw results committed |
 | CI | GitHub Actions workflow exists for Windows/Linux and Docker; hosted execution not yet performed |
 
-The Docker image used for the final smoke checks included the memory-only allocation
-optimization and updated active-expiration assertion. Build output reported passing
-race tests for command, config, persistence, RESP, server and storage packages.
+The v0.2 Docker image included all four extensions. Build output reported passing
+race tests for command, config, persistence, replication, RESP, server and storage.
 
 The official client image was used only for redis-cli. No Redis server implements
 any part of NebulaKV. The temporary test server was removed by the smoke script.
 
 Evidence: [asserted compatibility run](compatibility-run.txt),
 [raw storage benchmarks](benchmark-windows.txt),
-[initial measurements](benchmark-windows-before.txt).
+[initial measurements](benchmark-windows-before.txt),
+[v0.2 extension smoke](resilience-run.txt),
+[v0.2 microbenchmarks](benchmark-v0.2-windows.txt).
 
 ## Not verified in this environment
 
@@ -39,7 +49,7 @@ Evidence: [asserted compatibility run](compatibility-run.txt),
 - macOS/FreeBSD execution, network filesystems, faulty disks and power-loss recovery.
 - Production traffic, long-duration load/soak tests, full Redis compatibility,
   persistent-write throughput, memory exhaustion behavior or an independent security audit.
-- AOF rewrite/compaction: intentionally not implemented, as an extension milestone.
+- Automatic failover/consensus, incremental replication, TLS and forced memory-pressure kills.
 
 The core acceptance checks for this educational first project have been executed.
 That does not imply production readiness or completion of the other seven projects.

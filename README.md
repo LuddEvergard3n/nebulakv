@@ -22,6 +22,10 @@ and [SET documentation](https://redis.io/docs/latest/commands/set/).
 - Exclusive journal ownership on Windows, Linux, macOS and FreeBSD; Windows/Linux tested.
 - Command introspection, counters, deterministic tests and reproducible benchmarks.
 - A non-root, multi-stage Docker image and Windows/Linux CI configuration.
+- Optional per-connection AUTH from a password file, with constant-time digest comparison.
+- A configurable dataset budget with atomic no-eviction rejection.
+- Manual/automatic AOF compaction with protected replacement and recovery tests.
+- Authenticated asynchronous primary/replica synchronization with read-only replicas.
 
 ## Quick start
 
@@ -42,10 +46,14 @@ Windows in this workshop, including the portable Go installation:
 ```
 
 `--help` lists every flag. Defaults: `127.0.0.1:6380`, persistence off,
-64 connections, 30-second command read deadline, 5-second response write deadline,
+64 connections, a 64 MiB accounted dataset budget, 30-second command read deadline, 5-second response write deadline,
 and 5-second shutdown drain. Logs go to stderr; keys and values are not logged.
 Other flags: `--host`, `--port`, `--log-level`, `--max-clients`, `--read-timeout`,
 `--write-timeout`, `--shutdown-timeout`, `--appendonly`, `--data`.
+
+For AUTH, `--maxmemory`, `REWRITEAOF` and replication flags, see
+[the configuration and failure guide](docs/HARDENING.md). Defaults remain local:
+AUTH is enabled only when a password file is supplied, and replication is opt-in.
 
 ## redis-cli demo
 
@@ -94,12 +102,14 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for locking, replay and failure semantics
 | Area | Supported commands |
 | --- | --- |
 | Connectivity | `PING [message]`, `ECHO message`, `QUIT` |
+| Authentication | `AUTH password`, `AUTH default password` |
 | Strings | `SET key value [EX seconds | PX milliseconds] [NX | XX] [GET]`, `GET key` |
 | Multiple keys | `DEL key...`, `EXISTS key...`, `MGET key...`, `MSET key value...` |
 | Counters | `INCR key`, `DECR key` — signed 64-bit, checked overflow |
 | Expiration | `EXPIRE key seconds`, `PEXPIRE key milliseconds`, `TTL key`, `PTTL key`, `PERSIST key` |
 | Inspection | `TYPE key`, `DBSIZE`, `KEYS pattern`, `INFO` |
 | Administration | `FLUSHDB`, `COMMAND`, `COMMAND COUNT`, `COMMAND INFO name...` |
+| Persistence | `REWRITEAOF` — synchronous NebulaKV extension |
 | Client setup | `SELECT 0`, `CLIENT SETINFO name value` (accepted without storing metadata) |
 
 `EXISTS` counts duplicate arguments; `DEL` deletes each key at most once. `MSET`
@@ -117,24 +127,28 @@ matching treats `/` as an ordinary byte. Unicode character-aware globbing is not
 
 ```sh
 docker build -t nebulakv:local .
-docker run --rm -p 127.0.0.1:6380:6380 nebulakv:local
+docker run --rm --memory 256m --memory-swap 256m -p 127.0.0.1:6380:6380 nebulakv:local
 # Preserve data beyond container removal with an explicitly named volume:
-docker run --rm -p 127.0.0.1:6380:6380 -v nebulakv-data:/data \
+docker run --rm --memory 256m --memory-swap 256m -p 127.0.0.1:6380:6380 -v nebulakv-data:/data \
   nebulakv:local --host 0.0.0.0 --appendonly --data /data
 ```
 
 The final image contains a static binary and an owned data directory, runs as UID
 65532 and has no shell. Its build stage runs formatting, vet and race tests.
 Bind mounts must be writable by this UID. Local port binding above prevents
-accidental public exposure. Do not expose this unauthenticated educational server
-to untrusted networks.
+accidental public exposure. AUTH can restrict access, but the transport does not
+provide TLS. Keep this educational service on trusted local/private networks.
 
 ```powershell
 .\scripts\docker-smoke.ps1
+.\scripts\resilience-smoke.ps1
 ```
 
 On Linux: `bash scripts/docker-smoke.sh nebulakv:local`.
-Both scripts create and remove only their own temporary server container.
+The smoke scripts clean up their own temporary containers. The resilience script
+also creates an isolated network, a temporary test password and two servers with
+Docker memory ceilings. It tests authentication, atomic OOM rejection, compaction,
+replication and reconnection after abrupt primary restart.
 
 ## Tests and validation
 
@@ -180,13 +194,18 @@ growth and persistence. No throughput claim for production workloads is made.
   is not guaranteed for very large maps.
 - INFO, DBSIZE and KEYS scan the map while locked. Avoid them in latency-sensitive workloads.
 - Limits: 1 MiB per bulk string, 8 MiB per input frame, 1,024 elements per array,
-  4,096 total values, depth 8 and 4 KiB header lines. There is no total dataset
-  memory quota, eviction, response-size limit or protection from every abuse pattern.
-- RESP2 command arrays only: no inline protocol, RESP3, authentication, TLS,
-  replication, transactions, Lua, pub/sub, lists, sets, hashes or multiple databases.
+  4,096 total values, depth 8 and 4 KiB header lines. Dataset admission accounts for
+  key/value bytes plus 96 bytes per entry. This is not a process RSS measurement;
+  use Docker memory limits for a process ceiling. Eviction and response caps are absent.
+- RESP2 command arrays only: no inline protocol, RESP3, TLS, transactions, Lua,
+  pub/sub, lists, sets, hashes or multiple databases.
   INFO sections and most CLIENT/COMMAND subcommands are unsupported.
 - The AOF is NebulaKV-specific, not Redis's file format. JSON base64 increases
-  disk usage. No rewrite/compaction, backup tooling or online repair is implemented.
+  disk usage. Compaction is synchronous and holds the store lock. Backup tooling
+  and online repair of corrupt journals are not implemented.
+- Replication polls revisions and transfers a full snapshot only after changes.
+  It does not implement Redis PSYNC, incremental replication, consensus or automatic
+  failover. Reads may lag; after a disconnect, the last complete snapshot remains available.
 - File synchronization and checksums do not establish hardware/power-loss durability.
   A failed write has an uncertain disk outcome; retry requires restart and inspection.
 - This is an educational implementation, not a production Redis replacement.
@@ -200,6 +219,7 @@ internal/storage/     atomic operations, expiration, glob matching, benchmarks
 internal/command/     validation, dispatch and command catalog
 internal/server/      TCP lifecycle and statistics
 internal/persistence/ journal, replay and operating-system locks
+internal/replication/ bounded snapshot receiver and reconnect loop
 internal/config/      command-line configuration
 scripts/              reproducible verification and demos
 docs/                 milestones, evidence, benchmarks and interview walkthrough
@@ -208,9 +228,9 @@ docs/                 milestones, evidence, benchmarks and interview walkthrough
 
 ## Roadmap
 
-The core brief is the current scope. Extensions require separate verified milestones:
-bounded dataset memory, cursor-based SCAN, atomic AOF rewrite, a richer compatibility
-matrix, and representative TCP/persistence benchmarks before considering sharding.
+The core and the four requested extensions are implemented. Further milestones:
+cursor-based SCAN, optional eviction policies, incremental replication, TLS, a richer
+compatibility matrix and representative TCP/persistence benchmarks before sharding.
 
 ## What this project teaches
 

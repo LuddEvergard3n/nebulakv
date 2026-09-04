@@ -1,5 +1,16 @@
 # Measured storage benchmarks
 
+## v0.2 with memory admission
+
+[Raw v0.2 run](benchmark-v0.2-windows.txt), same command/hardware below, taken while
+Docker smoke tests were also running. GET: 30.35–33.40 ns/op; replacement SET:
+69.47–81.04 ns/op. Both still reported 0 B/op and 0 allocs/op. Mixed GET/SET:
+45.01–65.56 ns/op. SET now performs budget accounting, so the previous timings should
+not be presented as the current implementation's performance. These short samples
+still exclude network, persistence, snapshot transfer and new-key growth.
+
+## Historical v0.1 run
+
 2026-09-04, Windows/amd64, Go 1.27.1, Intel Core i9-13900HX, default
 GOMAXPROCS=32. The host was also running Docker/build work. These short samples
 are development measurements, not controlled capacity estimates.
