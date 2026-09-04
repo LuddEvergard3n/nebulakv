@@ -9,6 +9,7 @@ import (
 	"nebulakv/internal/replication"
 	"nebulakv/internal/resp"
 	"nebulakv/internal/storage"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -154,5 +155,65 @@ func TestReplicationAuthBudgetAndCancellation(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("replication did not cancel")
+	}
+}
+
+func TestReplicationStreamsMoreThanRESPArrayLimit(t *testing.T) {
+	primary := storage.New(nil)
+	pairs := make([]string, 0, 2200)
+	for i := range 1100 {
+		pairs = append(pairs, "key-"+strconv.Itoa(i), "value")
+	}
+	if err := primary.SetMany(pairs); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{MaxClients: 4, ReadTimeout: time.Second, WriteTimeout: time.Second, ShutdownTimeout: time.Second}
+	address, _, _ := startServer(t, New(cfg, primary, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	replica := storage.New(nil)
+	client := &replication.Client{Address: address, Timeout: 3 * time.Second, MaxMemory: 1 << 20, Store: replica}
+	if err := client.SyncOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if replica.Stats().Keys != 1100 {
+		t.Fatal(replica.Stats())
+	}
+}
+
+func TestAutomaticRewriteWorker(t *testing.T) {
+	s := storage.New(nil)
+	journal, err := persistence.Open(t.TempDir(), s.Replay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { journal.Close() })
+	s.SetJournal(journal)
+	for range 10 {
+		if _, _, _, err := s.Set("key", strings.Repeat("x", 1000), storage.SetOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := journal.Stats().Bytes
+	cfg := config.Config{MaxClients: 4, ReadTimeout: time.Second, WriteTimeout: time.Second, ShutdownTimeout: time.Second}
+	srv := New(cfg, s, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	rewritten := make(chan error, 1)
+	srv.AutoRewrite = func() error {
+		if journal.NeedsRewrite(1000) {
+			err := s.Rewrite()
+			rewritten <- err
+			return err
+		}
+		return nil
+	}
+	startServer(t, srv)
+	select {
+	case err := <-rewritten:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("automatic rewrite did not run")
+	}
+	if journal.Stats().Bytes >= before {
+		t.Fatal("automatic rewrite did not compact")
 	}
 }

@@ -29,3 +29,6 @@ jobs:
       - run: docker build -t nebulakv:ci .
       - name: redis-cli and restart compatibility
         run: bash scripts/docker-smoke.sh nebulakv:ci
+      - name: Auth, memory, rewrite and replication
+        shell: pwsh
+        run: ./scripts/resilience-smoke.ps1 -Image nebulakv:ci
