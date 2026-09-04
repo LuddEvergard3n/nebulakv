@@ -21,5 +21,20 @@ reachable. A portable official Go archive is used with SHA-256 verification.
 5. Distribution and review: CI, Docker recipe, measured benchmarks, architecture,
    interview demo and explicit validation report.
 
-The project is not complete until all acceptance gates in the original brief
-have been executed successfully. Unavailable gates remain explicitly pending.
+## Results
+
+1. RESP tests and vet passed before storage was introduced. Commit `a7f760c`.
+2. Commands, deterministic expiration, concurrency and multi-key tests passed.
+   Commit `4d45b07`.
+3. TCP fragmentation, pipelining, limits, concurrency and shutdown tests passed.
+   Commit `a078529`.
+4. Journal replay, binary strings, truncated tails, corruption, file ownership and
+   write failure tests passed. Commit `88d7351`.
+5. Measured allocation cleanup and stronger active-expiration assertion passed.
+   Commit `28d222c`.
+6. Docker build/race tests and official redis-cli checks passed, including normal
+   and abrupt restart. Documentation, CI configuration and review added.
+
+Docker became available after the initial inspection. The first project's core
+acceptance gates are recorded in [VALIDATION.md](VALIDATION.md). Hosted CI execution,
+the AOF rewrite extension and the other seven projects remain separate work.

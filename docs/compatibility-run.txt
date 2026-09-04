@@ -1,0 +1,25 @@
+PASS: PING -> PONG
+PASS: SET greeting hello -> OK
+PASS: GET greeting -> hello
+PASS: SET temporary value PX 1000 -> OK
+PASS: PTTL temporary -> -2
+PASS: SET counter 10 -> OK
+PASS: INCR counter -> 11
+PASS: SET greeting ignored NX GET -> hello
+# Server
+nebulakv_version:0.1.0
+uptime_in_seconds:11
+# Clients
+connected_clients:1
+total_connections_received:9
+# Stats
+total_commands_processed:9
+keys:2
+expired_keys:1
+key_value_bytes:22
+persistence:enabled;fsync=always;status=ok
+PASS: GET greeting -> hello
+PASS: GET counter -> 11
+PASS: GET greeting -> hello
+PASS: GET counter -> 11
+PASS: redis-cli compatibility, graceful restart and abrupt restart
