@@ -20,6 +20,8 @@ import (
 )
 
 type Server struct {
+	AutoRewrite     func() error
+	PersistenceInfo func() string
 	// PersistenceStatus is configured before Serve starts.
 	PersistenceStatus     func() string
 	config                config.Config
@@ -48,6 +50,7 @@ func (s *Server) Serve(ctx context.Context, listener net.Listener) error {
 		defer close(maintenance)
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
+		nextRewrite := time.Now()
 		for {
 			select {
 			case <-ctx.Done():
@@ -55,6 +58,12 @@ func (s *Server) Serve(ctx context.Context, listener net.Listener) error {
 				return
 			case <-ticker.C:
 				s.store.Sweep(128)
+				if s.AutoRewrite != nil && time.Now().After(nextRewrite) {
+					nextRewrite = time.Now().Add(time.Second)
+					if err := s.AutoRewrite(); err != nil {
+						s.log.Error("automatic journal rewrite failed", "error", err)
+					}
+				}
 			}
 		}
 	}()
@@ -176,5 +185,10 @@ func (s *Server) info() string {
 			persistence += ";status=" + s.PersistenceStatus()
 		}
 	}
-	return fmt.Sprintf("# Server\r\nnebulakv_version:0.1.0\r\nuptime_in_seconds:%d\r\n# Clients\r\nconnected_clients:%d\r\ntotal_connections_received:%d\r\n# Stats\r\ntotal_commands_processed:%d\r\nkeys:%d\r\nexpired_keys:%d\r\nkey_value_bytes:%d\r\npersistence:%s\r\n", int64(time.Since(s.started).Seconds()), clients, s.connections.Load(), s.commands.Load(), stats.Keys, stats.Expired, stats.Bytes, persistence)
+	info := fmt.Sprintf("# Server\r\nnebulakv_version:0.2.0\r\nuptime_in_seconds:%d\r\n# Clients\r\nconnected_clients:%d\r\ntotal_connections_received:%d\r\n# Stats\r\ntotal_commands_processed:%d\r\nkeys:%d\r\nexpired_keys:%d\r\nkey_value_bytes:%d\r\npersistence:%s\r\n", int64(time.Since(s.started).Seconds()), clients, s.connections.Load(), s.commands.Load(), stats.Keys, stats.Expired, stats.Bytes, persistence)
+	info += fmt.Sprintf("maxmemory:%d\r\naccounted_memory:%d\r\nauth_enabled:%t\r\n", stats.MaxMemory, stats.AccountedBytes, s.config.Password != "")
+	if s.PersistenceInfo != nil {
+		info += s.PersistenceInfo()
+	}
+	return info
 }

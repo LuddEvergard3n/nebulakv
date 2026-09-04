@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	RewriteSize                                int64
 	Host                                       string
 	Port                                       int
 	AppendOnly                                 bool
@@ -29,6 +30,7 @@ func Parse(args []string, out io.Writer) (Config, error) {
 	f.StringVar(&c.Host, "host", "127.0.0.1", "TCP bind address")
 	f.IntVar(&c.Port, "port", 6380, "TCP port (1-65535)")
 	f.BoolVar(&c.AppendOnly, "appendonly", false, "enable synchronous append-only persistence")
+	f.Int64Var(&c.RewriteSize, "aof-rewrite-size", 64<<20, "automatic rewrite threshold in bytes; 0 disables")
 	f.StringVar(&c.Data, "data", "./data", "directory containing appendonly.aof")
 	level := f.String("log-level", "info", "debug, info, warn, or error")
 	f.IntVar(&c.MaxClients, "max-clients", 64, "maximum simultaneous connections")
@@ -42,6 +44,9 @@ func Parse(args []string, out io.Writer) (Config, error) {
 	}
 	if f.NArg() != 0 {
 		return c, errors.New("unexpected positional arguments")
+	}
+	if c.RewriteSize < 0 || c.RewriteSize > 1<<40 {
+		return c, errors.New("invalid AOF rewrite threshold")
 	}
 	if c.MaxMemory <= 0 || c.MaxMemory > 1<<40 {
 		return c, errors.New("maxmemory must be between 1 and 1099511627776 bytes")

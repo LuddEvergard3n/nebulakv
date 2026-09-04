@@ -136,6 +136,7 @@ func TestExclusiveLockAndClear(t *testing.T) {
 func TestStickyWriteFailure(t *testing.T) {
 	dir := t.TempDir()
 	s, l := openStore(t, dir, nil)
+	defer l.lease.Close()
 	set(t, s, "key", "old", 0)
 	if err := l.file.Close(); err != nil {
 		t.Fatal(err)

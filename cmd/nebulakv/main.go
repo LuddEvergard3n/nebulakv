@@ -48,6 +48,16 @@ func run() (runErr error) {
 	srv := server.New(c, s, logger)
 	if journal != nil {
 		srv.PersistenceStatus = journal.Status
+		srv.PersistenceInfo = func() string {
+			stats := journal.Stats()
+			return fmt.Sprintf("aof_bytes:%d\r\naof_rewrites:%d\r\n", stats.Bytes, stats.Rewrites)
+		}
+		srv.AutoRewrite = func() error {
+			if journal.NeedsRewrite(c.RewriteSize) {
+				return s.Rewrite()
+			}
+			return nil
+		}
 	}
 	return srv.Serve(ctx, listener)
 }

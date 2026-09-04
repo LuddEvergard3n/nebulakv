@@ -20,9 +20,14 @@ const magic = "NKV1\n"
 const maxRecord = 24 << 20
 
 type Log struct {
-	mu      sync.Mutex
-	file    *os.File
-	failure error
+	mu              sync.Mutex
+	file            *os.File
+	failure         error
+	lease           *os.File
+	path            string
+	bytes, baseSize int64
+	rewrites        uint64
+	replace         func(string, string) error
 }
 
 // Open locks the journal for its lifetime, replays valid records and truncates
@@ -30,6 +35,19 @@ type Log struct {
 func Open(dir string, apply func(storage.Mutation) error) (*Log, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
+	}
+	lease, err := os.OpenFile(filepath.Join(dir, "appendonly.lock"), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return nil, err
+	}
+	keepLease := false
+	defer func() {
+		if !keepLease {
+			lease.Close()
+		}
+	}()
+	if err := lock(lease); err != nil {
+		return nil, fmt.Errorf("journal already in use: %w", err)
 	}
 	f, err := os.OpenFile(filepath.Join(dir, "appendonly.aof"), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
@@ -70,7 +88,14 @@ func Open(dir string, apply func(storage.Mutation) error) (*Log, error) {
 		return nil, err
 	}
 	ok = true
-	return &Log{file: f}, nil
+	keepLease = true
+	pos, err := f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		f.Close()
+		lease.Close()
+		return nil, err
+	}
+	return &Log{file: f, lease: lease, path: f.Name(), bytes: pos, baseSize: int64(len(magic)), replace: os.Rename}, nil
 }
 
 func replay(f *os.File, apply func(storage.Mutation) error) error {
@@ -154,6 +179,27 @@ func (l *Log) Append(m storage.Mutation) error {
 	if err := validate(m); err != nil {
 		return err
 	}
+	err := writeRecord(l.file, m)
+	if err == nil {
+		err = l.file.Sync()
+	}
+	if err != nil {
+		l.failure = err
+		return fmt.Errorf("persistence write failed: %w", err)
+	}
+	pos, err := l.file.Seek(0, io.SeekCurrent)
+	if err != nil {
+		l.failure = err
+		return err
+	}
+	l.bytes = pos
+	return nil
+}
+
+func writeRecord(w io.Writer, m storage.Mutation) error {
+	if err := validate(m); err != nil {
+		return err
+	}
 	payload, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -165,18 +211,11 @@ func (l *Log) Append(m storage.Mutation) error {
 	binary.BigEndian.PutUint32(frame[:4], uint32(len(payload)))
 	binary.BigEndian.PutUint32(frame[4:8], crc32.ChecksumIEEE(payload))
 	copy(frame[8:], payload)
-	n, err := l.file.Write(frame)
+	n, err := w.Write(frame)
 	if err == nil && n != len(frame) {
 		err = io.ErrShortWrite
 	}
-	if err == nil {
-		err = l.file.Sync()
-	}
-	if err != nil {
-		l.failure = err
-		return fmt.Errorf("persistence write failed: %w", err)
-	}
-	return nil
+	return err
 }
 
 func (l *Log) Status() string {
@@ -187,4 +226,8 @@ func (l *Log) Status() string {
 	}
 	return "ok"
 }
-func (l *Log) Close() error { l.mu.Lock(); defer l.mu.Unlock(); return l.file.Close() }
+func (l *Log) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return errors.Join(l.file.Close(), l.lease.Close())
+}

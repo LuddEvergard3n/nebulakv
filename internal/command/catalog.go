@@ -12,6 +12,7 @@ type spec struct {
 }
 
 var specs = map[string]spec{
+	"AUTH": {2, 3, 0, 0, 0, false}, "REWRITEAOF": {1, 1, 0, 0, 0, false},
 	"PING": {1, 2, 0, 0, 0, false}, "ECHO": {2, 2, 0, 0, 0, false},
 	"SET": {3, 0, 1, 1, 1, true}, "GET": {2, 2, 1, 1, 1, false},
 	"MSET": {3, 0, 1, -1, 2, true}, "MGET": {2, 0, 1, -1, 1, false},

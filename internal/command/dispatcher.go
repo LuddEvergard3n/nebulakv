@@ -42,6 +42,13 @@ func (d *Dispatcher) Execute(args []string) resp.Value {
 	}
 	s := d.Store
 	switch name {
+	case "AUTH":
+		return resp.Err("ERR AUTH requires a connection")
+	case "REWRITEAOF":
+		if err := s.Rewrite(); err != nil {
+			return failure(err)
+		}
+		return resp.Status("OK")
 	case "PING":
 		if len(args) == 2 {
 			return resp.String(args[1])
