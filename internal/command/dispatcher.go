@@ -11,8 +11,9 @@ import (
 )
 
 type Dispatcher struct {
-	Store *storage.Store
-	Info  func() string
+	ReadOnly bool
+	Store    *storage.Store
+	Info     func() string
 }
 
 func failure(err error) resp.Value {
@@ -41,6 +42,9 @@ func (d *Dispatcher) Execute(args []string) resp.Value {
 		return resp.Err("ERR wrong number of arguments for '" + strings.ToLower(name) + "' command")
 	}
 	s := d.Store
+	if d.ReadOnly && spec.write {
+		return resp.Err("READONLY replica does not accept writes")
+	}
 	switch name {
 	case "AUTH":
 		return resp.Err("ERR AUTH requires a connection")

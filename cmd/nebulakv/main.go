@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"nebulakv/internal/config"
 	"nebulakv/internal/persistence"
+	"nebulakv/internal/replication"
 	"nebulakv/internal/server"
 	"nebulakv/internal/storage"
 	"net"
@@ -46,6 +47,15 @@ func run() (runErr error) {
 	defer stop()
 	logger.Info("NebulaKV listening", "address", listener.Addr().String(), "appendonly", c.AppendOnly)
 	srv := server.New(c, s, logger)
+	if c.Primary != "" {
+		client := &replication.Client{Address: c.Primary, Password: c.PrimaryPassword, Interval: c.ReplicaInterval, Timeout: c.ReplicaTimeout, MaxMemory: c.MaxMemory, Store: s}
+		srv.ReplicationInfo = client.Info
+		srv.ReplicationReady = client.Ready
+		replicaCtx, cancel := context.WithCancel(ctx)
+		done := make(chan struct{})
+		go func() { defer close(done); client.Run(replicaCtx) }()
+		defer func() { cancel(); <-done }()
+	}
 	if journal != nil {
 		srv.PersistenceStatus = journal.Status
 		srv.PersistenceInfo = func() string {

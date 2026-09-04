@@ -4,6 +4,7 @@ package server
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -20,8 +21,12 @@ import (
 )
 
 type Server struct {
-	AutoRewrite     func() error
-	PersistenceInfo func() string
+	ReplicationReady func() bool
+	epoch            string
+	syncSlot         chan struct{}
+	ReplicationInfo  func() string
+	AutoRewrite      func() error
+	PersistenceInfo  func() string
 	// PersistenceStatus is configured before Serve starts.
 	PersistenceStatus     func() string
 	config                config.Config
@@ -38,6 +43,9 @@ type Server struct {
 func New(c config.Config, store *storage.Store, log *slog.Logger) *Server {
 	s := &Server{config: c, store: store, log: log, started: time.Now(), clients: make(map[net.Conn]struct{})}
 	s.dispatch = command.Dispatcher{Store: store, Info: s.info}
+	s.dispatch.ReadOnly = c.Primary != ""
+	s.epoch = rand.Text()
+	s.syncSlot = make(chan struct{}, 1)
 	return s
 }
 
@@ -150,6 +158,13 @@ func (s *Server) handle(ctx context.Context, conn net.Conn) {
 			}
 		} else if !authenticated && !strings.EqualFold(args[0], "QUIT") {
 			response = resp.Err("NOAUTH Authentication required")
+		} else if s.ReplicationReady != nil && !s.ReplicationReady() && !startupCommand(args[0]) {
+			response = resp.Err("LOADING replica has not completed its initial synchronization")
+		} else if strings.EqualFold(args[0], "NKV.SYNC") {
+			if err := s.synchronize(ctx, conn, writer, args); err != nil {
+				s.log.Debug("snapshot transfer failed", "error", err)
+			}
+			return
 		} else {
 			response = s.dispatch.Execute(args)
 		}
@@ -189,6 +204,11 @@ func (s *Server) info() string {
 	info += fmt.Sprintf("maxmemory:%d\r\naccounted_memory:%d\r\nauth_enabled:%t\r\n", stats.MaxMemory, stats.AccountedBytes, s.config.Password != "")
 	if s.PersistenceInfo != nil {
 		info += s.PersistenceInfo()
+	}
+	if s.ReplicationInfo != nil {
+		info += s.ReplicationInfo()
+	} else {
+		info += "role:primary\r\n"
 	}
 	return info
 }

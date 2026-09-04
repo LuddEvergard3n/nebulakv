@@ -37,6 +37,7 @@ type Mutation struct {
 type Journal interface{ Append(Mutation) error }
 
 type Store struct {
+	revision        uint64
 	mu              sync.Mutex
 	entries         map[string]Entry
 	now             func() time.Time
@@ -66,6 +67,7 @@ func (s *Store) lookup(key string, now int64) (Entry, bool) {
 }
 
 func (s *Store) apply(m Mutation) {
+	s.revision++
 	if m.Clear {
 		s.entries = make(map[string]Entry)
 		s.used = 0
@@ -114,6 +116,7 @@ func (s *Store) put(key string, e Entry) error {
 	}
 	if s.journal == nil {
 		s.assign(key, e)
+		s.revision++
 		return nil
 	}
 	return s.commit(Mutation{Changes: []Change{change(key, e)}})

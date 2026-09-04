@@ -11,6 +11,8 @@ import (
 )
 
 type Config struct {
+	Primary, PrimaryPassword                   string
+	ReplicaInterval, ReplicaTimeout            time.Duration
 	RewriteSize                                int64
 	Host                                       string
 	Port                                       int
@@ -28,6 +30,10 @@ func Parse(args []string, out io.Writer) (Config, error) {
 	f := flag.NewFlagSet("nebulakv", flag.ContinueOnError)
 	f.SetOutput(out)
 	f.StringVar(&c.Host, "host", "127.0.0.1", "TCP bind address")
+	f.StringVar(&c.Primary, "replicaof", "", "primary host:port; enable read-only asynchronous snapshot replication")
+	primaryPasswordFile := f.String("primary-password-file", "", "password file used to authenticate to the primary")
+	f.DurationVar(&c.ReplicaInterval, "replica-interval", time.Second, "interval between primary revision checks")
+	f.DurationVar(&c.ReplicaTimeout, "replica-timeout", 30*time.Second, "deadline for a complete snapshot transfer")
 	f.IntVar(&c.Port, "port", 6380, "TCP port (1-65535)")
 	f.BoolVar(&c.AppendOnly, "appendonly", false, "enable synchronous append-only persistence")
 	f.Int64Var(&c.RewriteSize, "aof-rewrite-size", 64<<20, "automatic rewrite threshold in bytes; 0 disables")
@@ -52,6 +58,25 @@ func Parse(args []string, out io.Writer) (Config, error) {
 		return c, errors.New("maxmemory must be between 1 and 1099511627776 bytes")
 	}
 	var err error
+	c.PrimaryPassword, err = ReadSecret(*primaryPasswordFile)
+	if err != nil {
+		return c, err
+	}
+	if c.ReplicaInterval <= 0 || c.ReplicaTimeout <= 0 {
+		return c, errors.New("replica intervals must be positive")
+	}
+	if c.Primary != "" {
+		host, port, err := net.SplitHostPort(c.Primary)
+		if err != nil || host == "" {
+			return c, errors.New("replicaof requires host:port")
+		}
+		n, err := strconv.Atoi(port)
+		if err != nil || n < 1 || n > 65535 {
+			return c, errors.New("invalid primary port")
+		}
+	} else if *primaryPasswordFile != "" {
+		return c, errors.New("primary password requires replicaof")
+	}
 	c.Password, err = ReadSecret(*passwordFile)
 	if err != nil {
 		return c, err
