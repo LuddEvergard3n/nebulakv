@@ -10,10 +10,6 @@ Inspired by [Build Your Own X](https://github.com/codecrafters-io/build-your-own
 Protocol behavior is based on the [RESP specification](https://redis.io/docs/latest/develop/reference/protocol-spec/)
 and [SET documentation](https://redis.io/docs/latest/commands/set/).
 
-> Demo recording slot: a terminal GIF can be added here. The runnable interview
-> walkthrough is in [docs/DEMO.md](docs/DEMO.md). No screenshot is presented as proof
-> of a feature that has not been exercised.
-
 ## Features
 
 - Binary-safe string keys and values; RESP2 serialization and bounded parsing.
