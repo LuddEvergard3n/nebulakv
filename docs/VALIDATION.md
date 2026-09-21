@@ -29,7 +29,7 @@ This report describes executed checks, not planned capabilities.
 | Automatic reconnect | Primary killed and restarted; running replica received later writes automatically |
 | Parser fuzzing | Five-second run, four workers, 427,637 executions; no failure in that run |
 | Benchmarks | Three short Windows samples per storage workload; raw results committed |
-| CI | First public [GitHub Actions run](https://github.com/LuddEvergard3n/nebulakv/actions/runs/35554705329) passed Windows, Linux and Docker jobs |
+| CI | Public [GitHub Actions workflow](https://github.com/LuddEvergard3n/nebulakv/actions/workflows/ci.yml) passed Windows, Linux and Docker jobs |
 
 The v0.2 Docker image included all four extensions. Build output reported passing
 race tests for command, config, persistence, replication, RESP, server and storage.
