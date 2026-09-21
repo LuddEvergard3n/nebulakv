@@ -240,6 +240,3 @@ TCP reads do not correspond to messages. Multi-key correctness requires a clear
 atomicity boundary. Durability is an ordering and failure-handling problem, not just
 file output. Relative TTLs must become absolute deadlines before persistence.
 Useful optimization starts with an observed cost and a constrained measurement.
-
-[PORTFOLIO_REVIEW.md](PORTFOLIO_REVIEW.md) provides technical interview questions,
-trade-offs and editable English presentation scripts.
