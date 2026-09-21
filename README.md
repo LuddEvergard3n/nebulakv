@@ -1,5 +1,7 @@
 # NebulaKV
 
+[![verify](https://github.com/LuddEvergard3n/nebulakv/actions/workflows/ci.yml/badge.svg)](https://github.com/LuddEvergard3n/nebulakv/actions/workflows/ci.yml)
+
 A small, educational in-memory string database written in Go, with a TCP server,
 a hand-built RESP2 codec, atomic commands, key expiration and an append-only journal.
 The runtime has **no third-party Go dependencies** and does not use Redis internally.
@@ -167,8 +169,8 @@ atomic MSET/MGET, binary replay, truncation, corruption and journal ownership.
 Clock-based expiry tests do not sleep. Real network tests use ephemeral ports and
 bounded failure deadlines. The external CLI walkthrough deliberately allows wall time to elapse.
 
-See [docs/VALIDATION.md](docs/VALIDATION.md) for what actually ran. CI is configured;
-an actual hosted GitHub Actions run requires publishing the repository.
+See [docs/VALIDATION.md](docs/VALIDATION.md) for what actually ran. GitHub Actions
+validates Windows, Linux and Docker on every push and pull request.
 
 ## Benchmarks
 

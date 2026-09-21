@@ -1,7 +1,7 @@
 # Validation record
 
-Date: 2026-09-04. Updated for v0.2 extensions. This report describes executed checks,
-not planned capabilities.
+Date: 2026-09-04. Updated on 2026-09-20 after the first public hosted run.
+This report describes executed checks, not planned capabilities.
 
 | Gate | Result and scope |
 | --- | --- |
@@ -29,7 +29,7 @@ not planned capabilities.
 | Automatic reconnect | Primary killed and restarted; running replica received later writes automatically |
 | Parser fuzzing | Five-second run, four workers, 427,637 executions; no failure in that run |
 | Benchmarks | Three short Windows samples per storage workload; raw results committed |
-| CI | GitHub Actions workflow exists for Windows/Linux and Docker; hosted execution not yet performed |
+| CI | First public [GitHub Actions run](https://github.com/LuddEvergard3n/nebulakv/actions/runs/35554705329) passed Windows, Linux and Docker jobs |
 
 The v0.2 Docker image included all four extensions. Build output reported passing
 race tests for command, config, persistence, replication, RESP, server and storage.
@@ -45,7 +45,7 @@ Evidence: [asserted compatibility run](compatibility-run.txt),
 
 ## Not verified in this environment
 
-- An actual hosted GitHub Actions run or public repository/release.
+- A tagged release and downloadable release artifacts.
 - macOS/FreeBSD execution, network filesystems, faulty disks and power-loss recovery.
 - Production traffic, long-duration load/soak tests, full Redis compatibility,
   persistent-write throughput, memory exhaustion behavior or an independent security audit.

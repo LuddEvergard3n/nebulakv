@@ -36,8 +36,8 @@ reachable. A portable official Go archive is used with SHA-256 verification.
    and abrupt restart. Documentation, CI configuration and review added.
 
 Docker became available after the initial inspection. The first project's core
-acceptance gates are recorded in [VALIDATION.md](VALIDATION.md). Hosted CI execution
-and the other seven projects remain separate work.
+acceptance gates are recorded in [VALIDATION.md](VALIDATION.md). The first hosted CI
+run passed after publication; the other seven projects remain separate work.
 
 ## v0.2 requested extensions
 
