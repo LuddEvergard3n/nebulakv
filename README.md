@@ -1,5 +1,8 @@
 # NebulaKV
 
+[![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![Redis protocol](https://img.shields.io/badge/Protocol-RESP2-DC382D?logo=redis&logoColor=white)](https://redis.io/docs/latest/develop/reference/protocol-spec/)
+[![Docker](https://img.shields.io/badge/Docker-Non--root-2496ED?logo=docker&logoColor=white)](Dockerfile)
 [![verify](https://github.com/LuddEvergard3n/nebulakv/actions/workflows/ci.yml/badge.svg)](https://github.com/LuddEvergard3n/nebulakv/actions/workflows/ci.yml)
 
 A small, educational in-memory string database written in Go, with a TCP server,
